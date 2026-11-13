@@ -5,11 +5,15 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - ".github/**"
 
   # Em pull requests, valida o código e a imagem sem acessar a AWS nem realizar deploy.
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - ".github/**"
 
 # Preserva as configurações AWS e os caminhos utilizados no workflow original.
 env:
@@ -155,70 +159,70 @@ jobs:
           exit-code: "1"
 
       # Usa OIDC, sem credenciais AWS permanentes, apenas em pushes na branch main.
-      # - name: Authenticate to AWS (OIDC)
-      #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      #   uses: aws-actions/configure-aws-credentials@v6
-      #   with:
-      #     role-to-assume: arn:aws:iam::640494160208:role/github-actions-ecr-role-prod
-      #     aws-region: ${{ env.AWS_REGION }}
+      - name: Authenticate to AWS (OIDC)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::640494160208:role/github-actions-ecr-role-prod
+          aws-region: ${{ env.AWS_REGION }}
 
-      # - name: Log In to Amazon ECR
-      #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      #   uses: aws-actions/amazon-ecr-login@v2
+      - name: Log In to Amazon ECR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: aws-actions/amazon-ecr-login@v2
 
-      # # O push é permitido somente quando todos os scans anteriores passaram.
-      # - name: Push Docker Image to ECR
-      #   id: push-image
-      #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      #   shell: bash
-      #   run: |
-      #     IMAGE_REF="${REGISTRY_URL}/${ECR_REPOSITORY}:${GITHUB_SHA}"
-      #     docker push "$IMAGE_REF"
-      #     echo "new_image=$IMAGE_REF" >> "$GITHUB_OUTPUT"
+      # O push é permitido somente quando todos os scans anteriores passaram.
+      - name: Push Docker Image to ECR
+        id: push-image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          IMAGE_REF="${REGISTRY_URL}/${ECR_REPOSITORY}:${GITHUB_SHA}"
+          docker push "$IMAGE_REF"
+          echo "new_image=$IMAGE_REF" >> "$GITHUB_OUTPUT"
 
-      # # Faz checkout do repositório GitOps usando o PAT já configurado no repositório.
-      # - name: Checkout GitOps Repository
-      #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      #   uses: actions/checkout@v7
-      #   with:
-      #     repository: ${{ env.GITOPS_REPO }}
-      #     token: ${{ secrets.GITOPS_PAT }}
-      #     path: gitops-repo
+      # Faz checkout do repositório GitOps usando o PAT já configurado no repositório.
+      - name: Checkout GitOps Repository
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          token: ${{ secrets.GITOPS_PAT }}
+          path: gitops-repo
 
-      # # Atualiza exclusivamente a imagem targeting-service no deployment Kubernetes.
-      # - name: Update Image Tag in Deployment Manifest
-      #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      #   shell: bash
-      #   env:
-      #     NEW_IMAGE: ${{ steps.push-image.outputs.new_image }}
-      #   run: |
-      #     cd gitops-repo
-      #     sed -i "s|image: ${REGISTRY_URL}/${ECR_REPOSITORY}:.*|image: ${NEW_IMAGE}|g" "$MANIFEST_PATH"
-      #     if ! grep -Fq "image: ${NEW_IMAGE}" "$MANIFEST_PATH"; then
-      #       echo "Unable to update the image in $MANIFEST_PATH" >&2
-      #       exit 1
-      #     fi
+      # Atualiza exclusivamente a imagem targeting-service no deployment Kubernetes.
+      - name: Update Image Tag in Deployment Manifest
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          NEW_IMAGE: ${{ steps.push-image.outputs.new_image }}
+        run: |
+          cd gitops-repo
+          sed -i "s|image: ${REGISTRY_URL}/${ECR_REPOSITORY}:.*|image: ${NEW_IMAGE}|g" "$MANIFEST_PATH"
+          if ! grep -Fq "image: ${NEW_IMAGE}" "$MANIFEST_PATH"; then
+            echo "Unable to update the image in $MANIFEST_PATH" >&2
+            exit 1
+          fi
 
-      # # Faz o commit somente se houve modificação e tenta publicar até cinco vezes.
-      # - name: Commit and Push GitOps Changes
-      #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      #   shell: bash
-      #   run: |
-      #     cd gitops-repo
-      #     git config user.name "github-actions-bot"
-      #     git config user.email "bot@github.com"
-      #     git add "$MANIFEST_PATH"
-      #     if git diff --cached --quiet; then
-      #       echo "GitOps manifest already references this image."
-      #       exit 0
-      #     fi
-      #     git commit -m "chore: deploy(targeting-service) bump image to ${GITHUB_SHA}"
-      #     for attempt in 1 2 3 4 5; do
-      #       git pull --rebase origin main
-      #       if git push origin main; then
-      #         exit 0
-      #       fi
-      #       sleep 5
-      #     done
-      #     echo "Failed to push GitOps changes after 5 attempts." >&2
-      #     exit 1
+      # Faz o commit somente se houve modificação e tenta publicar até cinco vezes.
+      - name: Commit and Push GitOps Changes
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          cd gitops-repo
+          git config user.name "github-actions-bot"
+          git config user.email "bot@github.com"
+          git add "$MANIFEST_PATH"
+          if git diff --cached --quiet; then
+            echo "GitOps manifest already references this image."
+            exit 0
+          fi
+          git commit -m "chore: deploy(targeting-service) bump image to ${GITHUB_SHA}"
+          for attempt in 1 2 3 4 5; do
+            git pull --rebase origin main
+            if git push origin main; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Failed to push GitOps changes after 5 attempts." >&2
+          exit 1
