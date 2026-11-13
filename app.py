@@ -168,27 +168,65 @@ def update_rule(flag_name):
     if not data:
         return jsonify({"error": "Corpo da requisição obrigatório"}), 400
 
-    fields = []
-    values = []
+    # fields = []
+    # values = []
 
-    if "rules" in data:
-        fields.append("rules = %s")
-        values.append(Json(data["rules"]))  # Serializa o JSON
-    if "is_enabled" in data:
-        fields.append("is_enabled = %s")
-        values.append(data["is_enabled"])
+    # if "rules" in data:
+    #     fields.append("rules = %s")
+    #     values.append(Json(data["rules"]))  # Serializa o JSON
+    # if "is_enabled" in data:
+    #     fields.append("is_enabled = %s")
+    #     values.append(data["is_enabled"])
 
-    if not fields:
+    # if not fields:
+    #     return (
+    #         jsonify(
+    #             {"error": "Pelo menos um campo ('rules', 'is_enabled') é obrigatório"}
+    #         ),
+    #         400,
+    #     )
+
+    # values.append(flag_name)  # Adiciona o 'flag_name' para a cláusula WHERE
+
+    # query = f"UPDATE targeting_rules SET {', '.join(fields)} WHERE flag_name = %s RETURNING *"
+
+    # Utiliza consultas estáticas para os campos permitidos.
+    # Evita SQL construído dinamicamente (Bandit: B608).
+    if "rules" in data and "is_enabled" in data:
+        query = (
+            "UPDATE targeting_rules "
+            "SET rules = %s, is_enabled = %s "
+            "WHERE flag_name = %s RETURNING *"
+        )
+        values = (
+            Json(data["rules"]),
+            data["is_enabled"],
+            flag_name,
+        )
+
+    elif "rules" in data:
+        query = (
+            "UPDATE targeting_rules "
+            "SET rules = %s "
+            "WHERE flag_name = %s RETURNING *"
+        )
+        values = (Json(data["rules"]), flag_name)
+
+    elif "is_enabled" in data:
+        query = (
+            "UPDATE targeting_rules "
+            "SET is_enabled = %s "
+            "WHERE flag_name = %s RETURNING *"
+        )
+        values = (data["is_enabled"], flag_name)
+
+    else:
         return (
             jsonify(
                 {"error": "Pelo menos um campo ('rules', 'is_enabled') é obrigatório"}
             ),
             400,
         )
-
-    values.append(flag_name)  # Adiciona o 'flag_name' para a cláusula WHERE
-
-    query = f"UPDATE targeting_rules SET {', '.join(fields)} WHERE flag_name = %s RETURNING *"
 
     conn = None
     cur = None
