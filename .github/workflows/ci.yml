@@ -161,20 +161,32 @@ jobs:
 
       # Usa OIDC, sem credenciais AWS permanentes, apenas em pushes na branch main.
       - name: Authenticate to AWS (OIDC)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: >-
+          github.ref == 'refs/heads/main' &&
+          (github.event_name == 'push' ||
+          github.event_name == 'workflow_dispatch')
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::640494160208:role/github-actions-ecr-role-prod
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Log In to Amazon ECR
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: >-
+          github.ref == 'refs/heads/main' &&
+          (github.event_name == 'push' ||
+          github.event_name == 'workflow_dispatch')
         uses: aws-actions/amazon-ecr-login@v2
 
       # O push é permitido somente quando todos os scans anteriores passaram.
       - name: Push Docker Image to ECR
         id: push-image
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: >-
+          github.ref == 'refs/heads/main' &&
+          (github.event_name == 'push' ||
+          github.event_name == 'workflow_dispatch')
         shell: bash
         run: |
           IMAGE_REF="${REGISTRY_URL}/${ECR_REPOSITORY}:${GITHUB_SHA}"
@@ -183,7 +195,11 @@ jobs:
 
       # Faz checkout do repositório GitOps usando o PAT já configurado no repositório.
       - name: Checkout GitOps Repository
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: >-
+          github.ref == 'refs/heads/main' &&
+          (github.event_name == 'push' ||
+          github.event_name == 'workflow_dispatch')
         uses: actions/checkout@v7
         with:
           repository: ${{ env.GITOPS_REPO }}
@@ -192,7 +208,11 @@ jobs:
 
       # Atualiza exclusivamente a imagem targeting-service no deployment Kubernetes.
       - name: Update Image Tag in Deployment Manifest
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: >-
+          github.ref == 'refs/heads/main' &&
+          (github.event_name == 'push' ||
+          github.event_name == 'workflow_dispatch')
         shell: bash
         env:
           NEW_IMAGE: ${{ steps.push-image.outputs.new_image }}
@@ -206,7 +226,11 @@ jobs:
 
       # Faz o commit somente se houve modificação e tenta publicar até cinco vezes.
       - name: Commit and Push GitOps Changes
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: >-
+          github.ref == 'refs/heads/main' &&
+          (github.event_name == 'push' ||
+          github.event_name == 'workflow_dispatch')
         shell: bash
         run: |
           cd gitops-repo
